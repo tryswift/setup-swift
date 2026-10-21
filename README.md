@@ -19,7 +19,7 @@ see [How verification works](#how-verification-works)). It never runs a pre-exis
 | `swift-version` | yes | | Exact toolchain version, e.g. `6.4.1` or `6.3.3`. Ranges and `latest` are not supported. |
 | `swift-sdks` | no | | Cross-compilation Swift SDKs to install after the toolchain: `static-linux`, `wasm`, `android` (comma or space separated). |
 | `use-preinstalled` | no | `false` | **Unverified opt-in.** If `swift` on `PATH` already reports exactly `swift-version`, run and use it instead of installing. By default no pre-existing binary is ever executed. |
-| `cache` | no | `true` | Cache the downloaded Linux toolchain archive and its `.sig` with `actions/cache`. The archive is re-verified with GPG on every run and extracted into a fresh directory; `false` reuses nothing on disk. |
+| `cache` | no | `true` | Cache the downloaded Linux toolchain archive and its `.sig` with `actions/cache`. The archive is re-verified with GPG on every run and extracted into a clean per-version directory; `false` reuses nothing on disk. |
 
 ## Outputs
 
@@ -50,14 +50,16 @@ published for every platform (for example, newer releases have no Ubuntu 20.04 b
 download fails with the URL that was tried.
 
 Linux: the tarball and `.sig` are kept in `$RUNNER_TOOL_CACHE/swift-archives/...` and cached (key: version,
-platform, arch). Every run, including a cache hit, re-verifies them with GPG and extracts into a new private
-directory under `$RUNNER_TEMP`, which is added to `PATH`; extracted trees are never cached or reused. A cache
+platform, arch). Every run, including a cache hit, re-verifies them with GPG and wipes and then extracts into the
+deterministic directory `$RUNNER_TOOL_CACHE/swift-verified/<version>/<arch>-<platform>`, which is added to `PATH`.
+The path is stable so SwiftPM build caches (which record the compiler path) stay valid, but whatever was in it is
+deleted first and only the archive verified in this run is extracted; extracted trees are never cached or reused. A cache
 entry that fails verification fails the job instead of being re-downloaded. Missing build prerequisites (`libcurl4-openssl-dev`,
 `libxml2-dev`, the GCC dev packages, ...) are installed with `apt-get` only if absent.
 
 macOS: the package is installed into the user domain (`~/Library/Developer/Toolchains`), falling back to
 `sudo installer -target /`. `TOOLCHAINS` is exported with the toolchain's bundle identifier and its
-`usr/bin` is prepended to `PATH`. macOS installs are not cached.
+`usr/bin` is prepended to `PATH`. The install path is deterministic (like the Linux and Windows ones), so SwiftPM build caches stay valid. macOS installs are not cached.
 
 Windows: the installer runs silently (`/install /quiet`) into `%LocalAppData%\Programs\Swift`; the toolchain and
 runtime `bin` directories are added to `PATH` and `SDKROOT` is set. Visual Studio (C++ tools, Windows SDK),

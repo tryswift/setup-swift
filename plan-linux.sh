@@ -37,6 +37,7 @@ root="${RUNNER_TOOL_CACHE:-${RUNNER_TEMP:-/tmp}}"
 {
   echo "url=${base}/${file}"
   echo "file=${file}"
+  echo "install-dir=${root}/swift-verified/${v}/${arch}-${dir_platform}"
   echo "download-dir=${root}/swift-archives/${v}-${arch}-${dir_platform}"
   echo "cache-key=swift-toolchain-${v}-${dir_platform}-${arch}-archive-v2"
 } >> "${GITHUB_OUTPUT:?}"

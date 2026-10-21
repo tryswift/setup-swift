@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Installs a swift.org Linux toolchain. The tarball and its .sig are verified with GPG on
-# EVERY run (see verify-gpg.sh) and extracted into a fresh private directory, so nothing
-# previously on disk is ever executed. DOWNLOAD_DIR may hold a cached copy of the archive
+# EVERY run (see verify-gpg.sh) and extracted into INSTALL_DIR, a deterministic per-version path (stable compiler paths keep SwiftPM
+# build caches valid). INSTALL_DIR is removed completely before extraction, so nothing previously
+# on disk is ever executed. DOWNLOAD_DIR may hold a cached copy of the archive
 # pair to skip the download; it is re-verified before use. Without DOWNLOAD_DIR
 # (cache: false) nothing on disk is reused.
-# Inputs (env): SWIFT_URL, SWIFT_FILE; optional DOWNLOAD_DIR, GITHUB_PATH, GITHUB_OUTPUT.
+# Inputs (env): SWIFT_URL, SWIFT_FILE, INSTALL_DIR; optional DOWNLOAD_DIR, GITHUB_PATH, GITHUB_OUTPUT.
 set -euo pipefail
 
 url="${SWIFT_URL:?}"
 file="${SWIFT_FILE:?}"
+dest="${INSTALL_DIR:?}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=verify-gpg.sh
 . "$here/verify-gpg.sh"
@@ -66,7 +68,17 @@ fi
 # Fail closed: a tampered cache entry is NOT replaced by a fresh download.
 verify_gpg_signature "$archive_dir/$file" "$archive_dir/$file.sig" "$scratch"
 
-dest="$(mktemp -d "${RUNNER_TEMP:-/tmp}/swift-toolchain.XXXXXX")"
+# Refuse anything but an absolute .../swift-verified/<version>/<platform> path before deleting it.
+case "$dest" in
+  /*/swift-verified/*/*) ;;
+  *) echo "::error::Refusing unexpected install directory '$dest'"; exit 1 ;;
+esac
+case "$dest" in
+  *..* | */./* | *//*) echo "::error::Refusing unexpected install directory '$dest'"; exit 1 ;;
+esac
+# Never reuse existing contents: wipe, then extract only the archive verified above.
+rm -r -f -- "$dest"
+mkdir -p "$dest"
 tar -xzf "$archive_dir/$file" -C "$dest" --strip-components=1
 [ -x "$dest/usr/bin/swift" ] || { echo "::error::$dest/usr/bin/swift is missing after extraction"; exit 1; }
 if [ -n "${GITHUB_PATH:-}" ]; then echo "$dest/usr/bin" >> "$GITHUB_PATH"; fi

@@ -85,6 +85,7 @@ runs:
       env:
         SWIFT_URL: ${{ steps.plan.outputs.url }}
         SWIFT_FILE: ${{ steps.plan.outputs.file }}
+        INSTALL_DIR: ${{ steps.plan.outputs.install-dir }}
         DOWNLOAD_DIR: ${{ inputs.cache == 'true' && steps.plan.outputs.download-dir || '' }}
       run: bash "$GITHUB_ACTION_PATH/install-linux.sh"
 
