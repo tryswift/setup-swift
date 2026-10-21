@@ -28,10 +28,13 @@ jobs:
   install:
     name: install (${{ matrix.os }}, ${{ matrix.swift }})
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, macos-latest]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, macos-latest, windows-latest]
         swift: ["6.4.1", "6.3.3"]
     steps:
       - uses: actions/checkout@v7
@@ -48,10 +51,15 @@ jobs:
           set -euo pipefail
           echo "source=$SOURCE swift-path=$SWIFT_PATH"
           test "$VERSION" = "${{ matrix.swift }}"
-          test -x "$SWIFT_PATH/swift"
+          ls "$SWIFT_PATH"/swift*
           mkdir hello && cd hello
           swift package init --type executable --name hello
           swift run
+          echo "$SOURCE" > ../source.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: source-${{ matrix.os }}-${{ matrix.swift }}
+          path: source.txt
 
   # Runs after `install` so the Linux toolchain cache it saved is available.
   cache-hit:
@@ -65,6 +73,9 @@ jobs:
         swift: ["6.4.1", "6.3.3"]
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: source-${{ matrix.os }}-${{ matrix.swift }}
       - id: setup
         uses: ./
         with:
@@ -73,8 +84,12 @@ jobs:
         env:
           SOURCE: ${{ steps.setup.outputs.source }}
         run: |
-          echo "source=$SOURCE"
-          case "$SOURCE" in preinstalled | cache) ;; *) echo "::error::expected a cache hit, got $SOURCE"; exit 1 ;; esac
+          first="$(cat source.txt)"
+          echo "first run: $first, second run: $SOURCE"
+          # Runner images differ in what they preinstall; only a first-run download must be cached.
+          if [ "$first" = download ]; then
+            test "$SOURCE" = cache || { echo "::error::expected a cache hit, got $SOURCE"; exit 1; }
+          fi
 
   unsupported-version:
     runs-on: ubuntu-24.04
@@ -85,5 +100,51 @@ jobs:
         continue-on-error: true
         with:
           swift-version: "6.99.99"
+      - name: Expect a clear failure
+        run: test "${{ steps.setup.outcome }}" = "failure"
+
+  swift-sdks:
+    name: sdks (${{ matrix.sdk }}, ${{ matrix.os }}, ${{ matrix.swift }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ["6.4.1", "6.3.3"]
+        include:
+          - { sdk: static-linux, os: ubuntu-24.04, id: 'x86_64-swift-linux-musl', build_args: "" }
+          - { sdk: wasm, os: ubuntu-24.04, id: '_wasm$', build_args: "" }
+          - { sdk: android, os: ubuntu-24.04, id: 'aarch64-unknown-linux-android28', build_args: "--static-swift-stdlib" }
+          - { sdk: android, os: macos-latest, id: 'aarch64-unknown-linux-android28', build_args: "--static-swift-stdlib" }
+    steps:
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./
+        with:
+          swift-version: ${{ matrix.swift }}
+          swift-sdks: ${{ matrix.sdk }}
+      - name: Build hello world with the SDK
+        env:
+          SDK_ID: ${{ matrix.id }}
+          BUILD_ARGS: ${{ matrix.build_args }}
+          SDKS: ${{ steps.setup.outputs.sdks }}
+        run: |
+          set -euo pipefail
+          echo "$SDKS"
+          id="$(grep -E -m1 -- "$SDK_ID" <<< "$SDKS")"
+          mkdir hello && cd hello
+          swift package init --type executable --name hello
+          # shellcheck disable=SC2086
+          swift build --swift-sdk "$id" $BUILD_ARGS
+
+  sdk-missing-checksum:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./
+        continue-on-error: true
+        with:
+          swift-version: "6.4.1"
+          swift-sdks: bogus
       - name: Expect a clear failure
         run: test "${{ steps.setup.outcome }}" = "failure"

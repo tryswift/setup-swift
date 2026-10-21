@@ -7,11 +7,20 @@ inputs:
   swift-version:
     description: Exact toolchain version, e.g. "6.4.1".
     required: true
+  swift-sdks:
+    description: >-
+      Comma or space separated Swift SDKs to install after the toolchain: static-linux, wasm, android.
+      Each bundle is checked against the sha256 pinned in sdk-checksums.txt.
+    required: false
+    default: ""
   cache:
     description: Cache the extracted Linux toolchain with actions/cache.
     required: false
     default: "true"
 outputs:
+  sdks:
+    description: Output of `swift sdk list` after installing swift-sdks (empty if none requested).
+    value: ${{ steps.sdks.outputs.sdks }}
   swift-path:
     description: Directory containing the active swift binary.
     value: ${{ steps.report.outputs.swift-path }}
@@ -76,12 +85,20 @@ runs:
         SWIFT_VERSION: ${{ inputs.swift-version }}
       run: bash "$GITHUB_ACTION_PATH/install-macos.sh"
 
+    - name: Install Swift (Windows, Authenticode verified)
+      id: windows
+      if: steps.existing.outputs.found != 'true' && runner.os == 'Windows'
+      shell: pwsh
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+      run: '& "$env:GITHUB_ACTION_PATH/install-windows.ps1"'
+
     - name: Report Swift version
       id: report
       shell: bash
       env:
         SWIFT_VERSION: ${{ inputs.swift-version }}
-        SOURCE: ${{ steps.linux.outputs.source || steps.macos.outputs.source || 'preinstalled' }}
+        SOURCE: ${{ steps.linux.outputs.source || steps.macos.outputs.source || steps.windows.outputs.source || 'preinstalled' }}
       run: |
         set -euo pipefail
         swift --version
@@ -93,3 +110,12 @@ runs:
         echo "swift-path=$(dirname "$(command -v swift)")" >> "$GITHUB_OUTPUT"
         echo "version=$reported" >> "$GITHUB_OUTPUT"
         echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
+
+    - name: Install Swift SDKs
+      id: sdks
+      if: inputs.swift-sdks != ''
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+        SWIFT_SDKS: ${{ inputs.swift-sdks }}
+      run: bash "$GITHUB_ACTION_PATH/install-sdks.sh"

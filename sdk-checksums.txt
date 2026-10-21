@@ -1,0 +1,16 @@
+# <swift-version> <kind> <sha256 of the .artifactbundle.tar.gz>
+#
+# kind -> published bundle (https://download.swift.org/swift-<v>-release/<dir>/swift-<v>-RELEASE/<file>):
+#   static-linux  static-sdk/  swift-<v>-RELEASE_static-linux-0.1.0.artifactbundle.tar.gz
+#   wasm          wasm-sdk/    swift-<v>-RELEASE_wasm.artifactbundle.tar.gz
+#   android       android-sdk/ swift-<v>-RELEASE_android.artifactbundle.tar.gz
+#
+# To add a version see "Updating the SDK checksums" in README.md. 6.4.1 values match the
+# checksums printed on https://www.swift.org/install/linux/ and the Android/WebAssembly getting-started
+# pages; 6.3.3 values were computed from bundles whose .sig verified against the pinned keys.
+6.4.1 static-linux cef5592d7430ed3c5ae1ddda479849c6f5252bd94a5723db1559f984caf38a7c
+6.4.1 wasm         783e6128d174d9f975b4eda68be02a5960681b723ef372e6876a7c2543a365d8
+6.4.1 android      a356b79f8f1daa6ae3a66f4c556966ca20c0208b3659805cf30a83a0a31d6772
+6.3.3 static-linux 87c3eaf908e67c0e13a84367119e12273cec1d2cd3d81f7d74bb36722d6b607b
+6.3.3 wasm         cabfa08b73bb8ac783927ecd15fa386e99d0c139c5f232445067bcf58379cae7
+6.3.3 android      d160cc3206dd1886dae3fef2337af5e25ec034692cd0ec225721c56cc69da7f5
