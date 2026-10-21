@@ -114,7 +114,7 @@ jobs:
           - { sdk: static-linux, os: ubuntu-24.04, id: 'x86_64-swift-linux-musl', build_args: "" }
           - { sdk: wasm, os: ubuntu-24.04, id: '_wasm$', build_args: "" }
           - { sdk: android, os: ubuntu-24.04, id: 'aarch64-unknown-linux-android28', build_args: "--static-swift-stdlib" }
-          - { sdk: android, os: macos-latest, id: 'aarch64-unknown-linux-android28', build_args: "--static-swift-stdlib" }
+          # macos-latest ships NDK r27, too old to link the Swift 6.4 Android SDK (needs r30): not built here.
     steps:
       - uses: actions/checkout@v7
       - id: setup
