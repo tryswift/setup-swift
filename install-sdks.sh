@@ -85,7 +85,11 @@ for kind in $requested; do
       tar -xzf "$work/$file" -C "$work/helper" "$member"
       installed=()
       for store in "${sdk_stores[@]}"; do
-        [ -d "$store/$bundle_name" ] && installed+=("$store/$bundle_name")
+        # Stores may be aliases of each other (symlinks); compare physical paths.
+        if [ -d "$store/$bundle_name" ]; then
+          real="$(cd -P "$store/$bundle_name" && pwd)"
+          case " ${installed[*]:-} " in *" $real "*) ;; *) installed+=("$real") ;; esac
+        fi
       done
       if [ "${#installed[@]}" -ne 1 ]; then
         echo "::error::Expected exactly one installed $bundle_name, found ${#installed[@]}"
