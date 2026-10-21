@@ -1,7 +1,9 @@
 # setup-swift
 
 A composite GitHub Action that installs an exact [swift.org](https://www.swift.org) toolchain and
-**verifies it before use**. It contains no Node.js code (only `bash` steps, plus `actions/cache`).
+**verifies the toolchain it installs before use** (Linux: GPG, macOS: Apple signature and team, Windows: Authenticode;
+see [How verification works](#how-verification-works)). It never runs a pre-existing `swift` unless you opt in with
+`use-preinstalled` (unverified). It contains no Node.js code (only `bash` steps, plus `actions/cache`).
 
 ```yaml
 - uses: actions/checkout@v7
@@ -16,7 +18,8 @@ A composite GitHub Action that installs an exact [swift.org](https://www.swift.o
 | --- | --- | --- | --- |
 | `swift-version` | yes | | Exact toolchain version, e.g. `6.4.1` or `6.3.3`. Ranges and `latest` are not supported. |
 | `swift-sdks` | no | | Cross-compilation Swift SDKs to install after the toolchain: `static-linux`, `wasm`, `android` (comma or space separated). |
-| `cache` | no | `true` | Cache the extracted Linux toolchain with `actions/cache`. |
+| `use-preinstalled` | no | `false` | **Unverified opt-in.** If `swift` on `PATH` already reports exactly `swift-version`, run and use it instead of installing. By default no pre-existing binary is ever executed. |
+| `cache` | no | `true` | Cache the downloaded Linux toolchain archive and its `.sig` with `actions/cache`. The archive is re-verified with GPG on every run and extracted into a fresh directory; `false` reuses nothing on disk. |
 
 ## Outputs
 
@@ -24,15 +27,16 @@ A composite GitHub Action that installs an exact [swift.org](https://www.swift.o
 | --- | --- |
 | `version` | Version reported by `swift --version`. |
 | `swift-path` | Directory containing the active `swift` binary. |
-| `source` | `preinstalled`, `cache`, `download` (Linux), `pkg` (macOS) or `installer` (Windows). |
+| `source` | `preinstalled` (opt-in only), `cache`, `download` (Linux), `pkg` (macOS) or `installer` (Windows). |
 | `sdks` | `swift sdk list` output after installing `swift-sdks`. |
 
 The action fails if `swift --version` does not report exactly the requested version afterwards.
 
 ## Behaviour and supported platforms
 
-If `swift --version` already reports the requested version (some runner images preinstall one),
-that toolchain is used and nothing is downloaded.
+By default the action ignores any Swift already on the machine and installs the verified toolchain, which is put
+first on `PATH`. With `use-preinstalled: true` a matching `swift` on `PATH` is used as is (and a warning is
+emitted); that toolchain is **not verified** by this action.
 
 | Platform | Artifact | Verification |
 | --- | --- | --- |
@@ -45,9 +49,10 @@ Other Linux distributions and architectures fail with an explicit error. Not eve
 published for every platform (for example, newer releases have no Ubuntu 20.04 build); a missing
 download fails with the URL that was tried.
 
-Linux: the toolchain is extracted to `$RUNNER_TOOL_CACHE/swift/<version>/<arch>-<platform>`, added to
-`PATH` and cached (key: version, platform, arch). A cache hit skips the download; the toolchain was
-verified when it was first installed. Missing build prerequisites (`libcurl4-openssl-dev`,
+Linux: the tarball and `.sig` are kept in `$RUNNER_TOOL_CACHE/swift-archives/...` and cached (key: version,
+platform, arch). Every run, including a cache hit, re-verifies them with GPG and extracts into a new private
+directory under `$RUNNER_TEMP`, which is added to `PATH`; extracted trees are never cached or reused. A cache
+entry that fails verification fails the job instead of being re-downloaded. Missing build prerequisites (`libcurl4-openssl-dev`,
 `libxml2-dev`, the GCC dev packages, ...) are installed with `apt-get` only if absent.
 
 macOS: the package is installed into the user domain (`~/Library/Developer/Toolchains`), falling back to
@@ -56,7 +61,8 @@ macOS: the package is installed into the user domain (`~/Library/Developer/Toolc
 
 Windows: the installer runs silently (`/install /quiet`) into `%LocalAppData%\Programs\Swift`; the toolchain and
 runtime `bin` directories are added to `PATH` and `SDKROOT` is set. Visual Studio (C++ tools, Windows SDK),
-preinstalled on GitHub's Windows runners, is still required. Windows installs are not cached.
+preinstalled on GitHub's Windows runners, is still required. Windows installs are not cached. The directories for the requested version must not exist before the
+installer runs, and exactly one matching `Toolchains`, `Runtimes` and `Platforms` directory is selected.
 
 ## Swift SDKs (static Linux, WebAssembly, Android)
 
@@ -69,7 +75,8 @@ preinstalled on GitHub's Windows runners, is still required. Windows installs ar
 
 Each bundle is downloaded by the action (never by `swift sdk install <url>`), compared with the sha256 in
 [`sdk-checksums.txt`](sdk-checksums.txt), GPG-verified against the pinned keys when `gpg` is installed, and
-installed from the local file. A version with no entry fails with a clear message. Afterwards use the
+installed from the local file. For Android, the `setup-android-sdk.sh` helper that is run must be byte-identical to
+the one inside the verified archive, and a pre-existing bundle of the same name is rejected. A version with no entry fails with a clear message. Afterwards use the
 SDK id or triple from `swift sdk list`, e.g. `swift build --swift-sdk swift-6.4.1-RELEASE_wasm`,
 `--swift-sdk x86_64-swift-linux-musl`, or `--swift-sdk aarch64-unknown-linux-android28 --static-swift-stdlib`.
 
@@ -90,8 +97,9 @@ For a new Swift version, take the `--checksum` values printed on the swift.org i
 
 Linux. The tarball and its `.sig` are downloaded, a temporary `GNUPGHOME` is created, and only the keys in
 [`swift-release-keys.asc`](swift-release-keys.asc) are imported. `gpg --verify --status-fd` must report
-`GOODSIG`, and the primary-key fingerprint in `VALIDSIG` must equal one of the fingerprints pinned in
-[`install-linux.sh`](install-linux.sh). There is no trust-on-first-use and no network key fetch.
+exactly one `GOODSIG` and one `VALIDSIG` (and no `EXPKEYSIG`, `REVKEYSIG`, `EXPSIG`, `BADSIG`, `ERRSIG` or
+`NO_PUBKEY`), and the primary-key fingerprint in `VALIDSIG` must equal one of the fingerprints pinned in
+[`verify-gpg.sh`](verify-gpg.sh), shared by the toolchain and SDK installers. There is no trust-on-first-use and no network key fetch.
 
 macOS. `pkgutil --check-signature` must succeed, the package must be notarized, and the leaf certificate
 must be `Developer ID Installer: Swift Open Source (V9AUD2URP3)`. The team ID is pinned rather than the
@@ -119,13 +127,13 @@ compressed; use `curl --compressed`). The fingerprints were cross-checked agains
 2. `curl --compressed -O https://www.swift.org/keys/all-keys.asc`, import it into a scratch `GNUPGHOME`
    and confirm the new fingerprints match the web page.
 3. Export the keys: `gpg --armor --export <FPR> ... > swift-release-keys.asc`.
-4. Update `PINNED_FINGERPRINTS` in `install-linux.sh` and the table above, then run CI.
+4. Update `PINNED_FINGERPRINTS` in `verify-gpg.sh` and the table above, then run CI.
 
 ## Security notes
 
 - Pin the action by commit SHA in sensitive workflows.
-- The Linux cache stores an already-verified toolchain; caches are scoped per branch by GitHub, but a
-  workflow that can write the cache can plant a toolchain. Set `cache: false` if that matters to you.
+- The Linux cache holds only the downloaded archive and signature, which are re-verified on every run, so a
+  poisoned cache fails the job rather than running attacker code. CI covers this (`fail-closed` job).
 - Report vulnerabilities as described in [SECURITY.md](SECURITY.md).
 
 ## Development

@@ -13,8 +13,16 @@ inputs:
       Each bundle is checked against the sha256 pinned in sdk-checksums.txt.
     required: false
     default: ""
+  use-preinstalled:
+    description: >-
+      UNVERIFIED: if `swift` on PATH already reports exactly swift-version, run and use it instead of
+      installing a verified toolchain. Default false: pre-existing binaries are never executed.
+    required: false
+    default: "false"
   cache:
-    description: Cache the extracted Linux toolchain with actions/cache.
+    description: >-
+      Cache the downloaded Linux toolchain archive and its signature with actions/cache. The archive is
+      re-verified with GPG on every run; with false nothing on disk is ever reused.
     required: false
     default: "true"
 outputs:
@@ -28,24 +36,27 @@ outputs:
     description: The version reported by swift --version.
     value: ${{ steps.report.outputs.version }}
   source:
-    description: Where the toolchain came from (preinstalled, cache, download or pkg).
+    description: Where the toolchain came from (preinstalled, cache, download, pkg or installer).
     value: ${{ steps.report.outputs.source }}
 runs:
   using: composite
   steps:
-    - name: Check for a matching preinstalled Swift
+    - name: Validate inputs and optionally accept a preinstalled Swift
       id: existing
       shell: bash
       env:
         SWIFT_VERSION: ${{ inputs.swift-version }}
+        USE_PREINSTALLED: ${{ inputs.use-preinstalled }}
       run: |
         set -euo pipefail
         if [[ ! "$SWIFT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
           echo "::error::swift-version must be an exact version like 6.4.1, got '$SWIFT_VERSION'"
           exit 1
         fi
+        # Pre-existing binaries are executed only on explicit opt-in.
         pattern="Swift version ${SWIFT_VERSION//./\\.}[ (]"
-        if command -v swift > /dev/null && swift --version 2>&1 | grep -Eq "$pattern"; then
+        if [ "$USE_PREINSTALLED" = true ] && command -v swift > /dev/null && swift --version 2>&1 | grep -Eq "$pattern"; then
+          echo "::warning::use-preinstalled: using an unverified Swift $SWIFT_VERSION already on PATH"
           echo "Swift $SWIFT_VERSION is already installed; using it."
           echo "found=true" >> "$GITHUB_OUTPUT"
         else
@@ -64,7 +75,7 @@ runs:
       if: steps.existing.outputs.found != 'true' && runner.os == 'Linux' && inputs.cache == 'true'
       uses: actions/cache@v6
       with:
-        path: ${{ steps.plan.outputs.install-dir }}
+        path: ${{ steps.plan.outputs.download-dir }}
         key: ${{ steps.plan.outputs.cache-key }}
 
     - name: Install Swift (Linux, GPG verified)
@@ -74,7 +85,7 @@ runs:
       env:
         SWIFT_URL: ${{ steps.plan.outputs.url }}
         SWIFT_FILE: ${{ steps.plan.outputs.file }}
-        INSTALL_DIR: ${{ steps.plan.outputs.install-dir }}
+        DOWNLOAD_DIR: ${{ inputs.cache == 'true' && steps.plan.outputs.download-dir || '' }}
       run: bash "$GITHUB_ACTION_PATH/install-linux.sh"
 
     - name: Install Swift (macOS, signature verified)

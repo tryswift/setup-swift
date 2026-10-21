@@ -55,11 +55,6 @@ jobs:
           mkdir hello && cd hello
           swift package init --type executable --name hello
           swift run
-          echo "$SOURCE" > ../source.txt
-      - uses: actions/upload-artifact@v7
-        with:
-          name: source-${{ matrix.os }}-${{ matrix.swift }}
-          path: source.txt
 
   # Runs after `install` so the Linux toolchain cache it saved is available.
   cache-hit:
@@ -73,23 +68,14 @@ jobs:
         swift: ["6.4.1", "6.3.3"]
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          name: source-${{ matrix.os }}-${{ matrix.swift }}
       - id: setup
         uses: ./
         with:
           swift-version: ${{ matrix.swift }}
-      - name: Expect preinstalled or cached toolchain (no download)
+      - name: Expect the archive to come from the cache (and be re-verified)
         env:
           SOURCE: ${{ steps.setup.outputs.source }}
-        run: |
-          first="$(cat source.txt)"
-          echo "first run: $first, second run: $SOURCE"
-          # Runner images differ in what they preinstall; only a first-run download must be cached.
-          if [ "$first" = download ]; then
-            test "$SOURCE" = cache || { echo "::error::expected a cache hit, got $SOURCE"; exit 1; }
-          fi
+        run: test "$SOURCE" = cache
 
   unsupported-version:
     runs-on: ubuntu-24.04
@@ -164,3 +150,83 @@ jobs:
           swift-sdks: bogus
       - name: Expect a clear failure
         run: test "${{ steps.setup.outcome }}" = "failure"
+
+  # Tampering with anything on disk must fail closed, and nothing pre-existing may be executed.
+  fail-closed:
+    runs-on: ubuntu-24.04
+    env:
+      SWIFT_VERSION: "6.3.3"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Archive cache is re-verified, tampering fails closed, planted toolchains are ignored
+        run: |
+          set -euo pipefail
+          export RUNNER_TEMP="${RUNNER_TEMP:-/tmp}" GITHUB_OUTPUT="$PWD/out.txt" GITHUB_PATH="$PWD/path.txt"
+          : > "$GITHUB_OUTPUT"; : > "$GITHUB_PATH"
+          bash plan-linux.sh
+          export SWIFT_URL SWIFT_FILE
+          SWIFT_URL="$(sed -n 's/^url=//p' out.txt)"; SWIFT_FILE="$(sed -n 's/^file=//p' out.txt)"
+          dl="$RUNNER_TEMP/dl-cache"
+
+          echo "== 1. populate: downloads and verifies"
+          DOWNLOAD_DIR="$dl" bash install-linux.sh
+          grep -q '^source=download$' out.txt
+
+          echo "== 2. second run re-verifies the cached archive"
+          DOWNLOAD_DIR="$dl" bash install-linux.sh
+          tail -1 out.txt | grep -q '^source=cache$'
+          test "$(grep -c . path.txt)" -eq 2
+          test "$(sort -u path.txt | wc -l)" -eq 2   # a fresh directory per run
+
+          echo "== 3. planted extracted tree and fake swift are never used (cache disabled)"
+          planted="$RUNNER_TOOL_CACHE/swift/planted"
+          mkdir -p "$planted/usr/bin"
+          printf '#!/bin/sh\ntouch "%s/planted-ran"\n' "$RUNNER_TEMP" > "$planted/usr/bin/swift"
+          chmod +x "$planted/usr/bin/swift"
+          : > path.txt
+          env -u DOWNLOAD_DIR bash install-linux.sh
+          tail -1 out.txt | grep -q '^source=download$'
+          if grep -q planted path.txt; then exit 1; fi
+          test ! -e "$RUNNER_TEMP/planted-ran"
+
+          echo "== 4. tampered archive fails closed (no silent re-download)"
+          cp -r "$dl" "$RUNNER_TEMP/dl-bad-archive"
+          printf 'x' >> "$RUNNER_TEMP/dl-bad-archive/$SWIFT_FILE"
+          : > path.txt
+          if DOWNLOAD_DIR="$RUNNER_TEMP/dl-bad-archive" bash install-linux.sh; then echo "tampered archive was accepted"; exit 1; fi
+          test ! -s path.txt
+
+          echo "== 5. tampered signature fails closed"
+          cp -r "$dl" "$RUNNER_TEMP/dl-bad-sig"
+          head -c 100 "$dl/$SWIFT_FILE.sig" > "$RUNNER_TEMP/dl-bad-sig/$SWIFT_FILE.sig"
+          if DOWNLOAD_DIR="$RUNNER_TEMP/dl-bad-sig" bash install-linux.sh; then echo "tampered signature was accepted"; exit 1; fi
+          test ! -s path.txt
+
+  fake-preinstalled:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Put a fake swift first on PATH
+        run: |
+          mkdir -p "$RUNNER_TEMP/fake"
+          printf '#!/bin/sh\ntouch "%s/fake-swift-ran"\necho "Swift version 6.3.3 (fake)"\n' "$RUNNER_TEMP" > "$RUNNER_TEMP/fake/swift"
+          chmod +x "$RUNNER_TEMP/fake/swift"
+          echo "$RUNNER_TEMP/fake" >> "$GITHUB_PATH"
+      - id: secure
+        uses: ./
+        with:
+          swift-version: "6.3.3"
+      - name: Default never executes the pre-existing swift
+        run: |
+          test ! -e "$RUNNER_TEMP/fake-swift-ran"
+          test "${{ steps.secure.outputs.source }}" != preinstalled
+          swift --version | grep -q 'swift-6.3.3-RELEASE'
+      - id: optin
+        uses: ./
+        with:
+          swift-version: "6.3.3"
+          use-preinstalled: "true"
+      - name: Opt-in uses the (unverified) swift on PATH
+        run: |
+          # The verified toolchain from the previous step is still first on PATH, so it is the one found.
+          test "${{ steps.optin.outputs.source }}" = preinstalled

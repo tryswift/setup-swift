@@ -33,21 +33,43 @@ if ($sig.SignerCertificate.Subject -notmatch $ExpectedSubject) {
 }
 Write-Host "Authenticode signature verified for $file"
 
+# swift.org's installer defaults to %LocalAppData%\Programs\Swift. Directories for the requested
+# version must not exist beforehand, so only what this verified installer wrote is selected.
+$root = Join-Path $env:LOCALAPPDATA 'Programs\Swift'
+$vre = [regex]::Escape($v)
+$toolchainPattern = "^$vre(\+[A-Za-z0-9]+)?$"
+$versionPattern = "^$vre$"
+
+function Find-VersionDirs([string]$sub, [string]$pattern) {
+  $dir = Join-Path $root $sub
+  if (-not (Test-Path $dir)) { return @() }
+  return @(Get-ChildItem $dir -Directory | Where-Object { $_.Name -match $pattern })
+}
+function Select-One([string]$sub, [string]$pattern) {
+  $found = Find-VersionDirs $sub $pattern
+  if ($found.Count -ne 1) {
+    Write-Host "::error::Expected exactly one $sub directory for Swift $v under $root, found $($found.Count)"; exit 1
+  }
+  return $found[0].FullName
+}
+
+foreach ($pair in @(@('Toolchains', $toolchainPattern), @('Runtimes', $versionPattern), @('Platforms', $versionPattern))) {
+  if ((Find-VersionDirs $pair[0] $pair[1]).Count -gt 0) {
+    Write-Host "::error::$root\$($pair[0]) already contains Swift $v; refusing to reuse a pre-existing directory"; exit 1
+  }
+}
+
 $p = Start-Process -FilePath $exe -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru
 if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
   Write-Host "::error::Swift installer exited with code $($p.ExitCode)"; exit 1
 }
-
-# swift.org's installer defaults to %LocalAppData%\Programs\Swift.
-$root = Join-Path $env:LOCALAPPDATA 'Programs\Swift'
 if (-not (Test-Path $root)) { Write-Host "::error::Swift was not installed under $root"; exit 1 }
-Get-ChildItem $root -Recurse -Depth 2 -Directory | Select-Object -First 40 | ForEach-Object { Write-Host $_.FullName }
 
-$toolchainBin = Get-ChildItem (Join-Path $root 'Toolchains') -Directory | Select-Object -First 1 | ForEach-Object { Join-Path $_.FullName 'usr\bin' }
-$runtimeBin = Get-ChildItem (Join-Path $root 'Runtimes') -Directory | Select-Object -First 1 | ForEach-Object { Join-Path $_.FullName 'usr\bin' }
-$sdkRoot = Get-ChildItem (Join-Path $root 'Platforms') -Directory | Select-Object -First 1 | ForEach-Object { Join-Path $_.FullName 'Windows.platform\Developer\SDKs\Windows.sdk' }
+$toolchainBin = Join-Path (Select-One 'Toolchains' $toolchainPattern) 'usr\bin'
+$runtimeBin = Join-Path (Select-One 'Runtimes' $versionPattern) 'usr\bin'
+$sdkRoot = Join-Path (Select-One 'Platforms' $versionPattern) 'Windows.platform\Developer\SDKs\Windows.sdk'
 foreach ($d in @($toolchainBin, $runtimeBin, $sdkRoot)) {
-  if (-not $d -or -not (Test-Path $d)) { Write-Host "::error::Expected install directory missing: $d"; exit 1 }
+  if (-not (Test-Path $d)) { Write-Host "::error::Expected install directory missing: $d"; exit 1 }
 }
 Add-Content -Path $env:GITHUB_PATH -Value $toolchainBin
 Add-Content -Path $env:GITHUB_PATH -Value $runtimeBin
