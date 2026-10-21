@@ -75,7 +75,9 @@ for kind in $requested; do
     else
       echo "Android SDK bundle has no setup-android-sdk.sh; relying on ANDROID_NDK_HOME=$ndk"
     fi
-    if [ -n "${GITHUB_ENV:-}" ]; then echo "ANDROID_NDK_HOME=$ndk" >> "$GITHUB_ENV"; fi
+    if [ -n "${GITHUB_ENV:-}" ]; then
+      { echo "ANDROID_NDK_HOME=$ndk"; echo "ANDROID_NDK_ROOT=$ndk"; } >> "$GITHUB_ENV"
+    fi
   fi
 done
 

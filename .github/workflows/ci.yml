@@ -128,7 +128,7 @@ jobs:
           echo "Installing $pkg"
           yes | "$mgr" --licenses > /dev/null || true
           "$mgr" --install "$pkg" > /dev/null
-          echo "ANDROID_NDK_HOME=$sdkroot/ndk/${pkg#ndk;}" >> "$GITHUB_ENV"
+          { echo "ANDROID_NDK_HOME=$sdkroot/ndk/${pkg#ndk;}"; echo "ANDROID_NDK_ROOT=$sdkroot/ndk/${pkg#ndk;}"; echo "ANDROID_NDK_LATEST_HOME=$sdkroot/ndk/${pkg#ndk;}"; } >> "$GITHUB_ENV"
       - id: setup
         uses: ./
         with:
