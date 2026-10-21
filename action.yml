@@ -1,0 +1,95 @@
+name: Setup Swift
+description: >-
+  Installs an exact swift.org toolchain. Linux tarballs are GPG-verified against
+  pinned swift.org signing keys; macOS packages must be notarized and signed by
+  the Swift Open Source Developer ID team. Replaces swift-actions/setup-swift.
+inputs:
+  swift-version:
+    description: Exact toolchain version, e.g. "6.4.1".
+    required: true
+  cache:
+    description: Cache the extracted Linux toolchain with actions/cache.
+    required: false
+    default: "true"
+outputs:
+  swift-path:
+    description: Directory containing the active swift binary.
+    value: ${{ steps.report.outputs.swift-path }}
+  version:
+    description: The version reported by swift --version.
+    value: ${{ steps.report.outputs.version }}
+  source:
+    description: Where the toolchain came from (preinstalled, cache, download or pkg).
+    value: ${{ steps.report.outputs.source }}
+runs:
+  using: composite
+  steps:
+    - name: Check for a matching preinstalled Swift
+      id: existing
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$SWIFT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+          echo "::error::swift-version must be an exact version like 6.4.1, got '$SWIFT_VERSION'"
+          exit 1
+        fi
+        pattern="Swift version ${SWIFT_VERSION//./\\.}[ (]"
+        if command -v swift > /dev/null && swift --version 2>&1 | grep -Eq "$pattern"; then
+          echo "Swift $SWIFT_VERSION is already installed; using it."
+          echo "found=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Plan Linux toolchain install
+      id: plan
+      if: steps.existing.outputs.found != 'true' && runner.os == 'Linux'
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+      run: bash "$GITHUB_ACTION_PATH/plan-linux.sh"
+
+    - name: Restore Swift toolchain cache
+      if: steps.existing.outputs.found != 'true' && runner.os == 'Linux' && inputs.cache == 'true'
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.plan.outputs.install-dir }}
+        key: ${{ steps.plan.outputs.cache-key }}
+
+    - name: Install Swift (Linux, GPG verified)
+      id: linux
+      if: steps.existing.outputs.found != 'true' && runner.os == 'Linux'
+      shell: bash
+      env:
+        SWIFT_URL: ${{ steps.plan.outputs.url }}
+        SWIFT_FILE: ${{ steps.plan.outputs.file }}
+        INSTALL_DIR: ${{ steps.plan.outputs.install-dir }}
+      run: bash "$GITHUB_ACTION_PATH/install-linux.sh"
+
+    - name: Install Swift (macOS, signature verified)
+      id: macos
+      if: steps.existing.outputs.found != 'true' && runner.os == 'macOS'
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+      run: bash "$GITHUB_ACTION_PATH/install-macos.sh"
+
+    - name: Report Swift version
+      id: report
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+        SOURCE: ${{ steps.linux.outputs.source || steps.macos.outputs.source || 'preinstalled' }}
+      run: |
+        set -euo pipefail
+        swift --version
+        reported="$(swift --version 2>&1 | grep -Eo 'Swift version [0-9.]+' | head -1 | awk '{print $3}')"
+        if [ "$reported" != "$SWIFT_VERSION" ]; then
+          echo "::error::Requested Swift $SWIFT_VERSION but 'swift --version' reports '${reported:-unknown}'"
+          exit 1
+        fi
+        echo "swift-path=$(dirname "$(command -v swift)")" >> "$GITHUB_OUTPUT"
+        echo "version=$reported" >> "$GITHUB_OUTPUT"
+        echo "source=$SOURCE" >> "$GITHUB_OUTPUT"

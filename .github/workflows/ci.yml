@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: shellcheck
+        run: shellcheck ./*.sh
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+
+  install:
+    name: install (${{ matrix.os }}, ${{ matrix.swift }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, macos-latest]
+        swift: ["6.4.1", "6.3.3"]
+    steps:
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./
+        with:
+          swift-version: ${{ matrix.swift }}
+      - name: Check outputs and compile
+        env:
+          VERSION: ${{ steps.setup.outputs.version }}
+          SWIFT_PATH: ${{ steps.setup.outputs.swift-path }}
+          SOURCE: ${{ steps.setup.outputs.source }}
+        run: |
+          set -euo pipefail
+          echo "source=$SOURCE swift-path=$SWIFT_PATH"
+          test "$VERSION" = "${{ matrix.swift }}"
+          test -x "$SWIFT_PATH/swift"
+          mkdir hello && cd hello
+          swift package init --type executable --name hello
+          swift run
+
+  # Runs after `install` so the Linux toolchain cache it saved is available.
+  cache-hit:
+    name: cache hit (${{ matrix.os }}, ${{ matrix.swift }})
+    needs: install
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm]
+        swift: ["6.4.1", "6.3.3"]
+    steps:
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./
+        with:
+          swift-version: ${{ matrix.swift }}
+      - name: Expect preinstalled or cached toolchain (no download)
+        env:
+          SOURCE: ${{ steps.setup.outputs.source }}
+        run: |
+          echo "source=$SOURCE"
+          case "$SOURCE" in preinstalled | cache) ;; *) echo "::error::expected a cache hit, got $SOURCE"; exit 1 ;; esac
+
+  unsupported-version:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./
+        continue-on-error: true
+        with:
+          swift-version: "6.99.99"
+      - name: Expect a clear failure
+        run: test "${{ steps.setup.outcome }}" = "failure"
