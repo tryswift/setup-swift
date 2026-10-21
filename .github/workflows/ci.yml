@@ -205,10 +205,20 @@ jobs:
           test ! -e "$RUNNER_TEMP/planted-ran"
 
           echo "== 3b. unexpected install directories are refused"
-          for bad in "" / "$RUNNER_TEMP" "$RUNNER_TOOL_CACHE/swift-verified/../x"; do
+          for bad in "" / "$RUNNER_TEMP" "$RUNNER_TEMP/setup-swift/../x" "$RUNNER_TOOL_CACHE/swift-verified/x/y"; do
             if INSTALL_DIR="$bad" DOWNLOAD_DIR="$dl" bash install-linux.sh; then echo "accepted '$bad'"; exit 1; fi
           done
           test -d "$RUNNER_TEMP"
+
+          echo "== 3c. a symlinked path component is refused and its target left untouched"
+          decoy="$(mktemp -d)"
+          touch "$decoy/marker"
+          rm -r -f -- "$RUNNER_TEMP/setup-swift/$SWIFT_VERSION"
+          ln -s "$decoy" "$RUNNER_TEMP/setup-swift/$SWIFT_VERSION"
+          if DOWNLOAD_DIR="$dl" bash install-linux.sh; then echo "installed through a symlink"; exit 1; fi
+          test -e "$decoy/marker"
+          test "$(find "$decoy" -mindepth 1 | wc -l)" -eq 1
+          rm -f -- "$RUNNER_TEMP/setup-swift/$SWIFT_VERSION"
 
           echo "== 4. tampered archive fails closed (no silent re-download)"
           cp -r "$dl" "$RUNNER_TEMP/dl-bad-archive"

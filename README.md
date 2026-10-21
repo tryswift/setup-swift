@@ -50,11 +50,15 @@ published for every platform (for example, newer releases have no Ubuntu 20.04 b
 download fails with the URL that was tried.
 
 Linux: the tarball and `.sig` are kept in `$RUNNER_TOOL_CACHE/swift-archives/...` and cached (key: version,
-platform, arch). Every run, including a cache hit, re-verifies them with GPG and wipes and then extracts into the
-deterministic directory `$RUNNER_TOOL_CACHE/swift-verified/<version>/<arch>-<platform>`, which is added to `PATH`.
-The path is stable so SwiftPM build caches (which record the compiler path) stay valid, but whatever was in it is
-deleted first and only the archive verified in this run is extracted; extracted trees are never cached or reused. A cache
-entry that fails verification fails the job instead of being re-downloaded. Missing build prerequisites (`libcurl4-openssl-dev`,
+platform, arch). Every run, including a cache hit, copies them to a private snapshot, re-verifies the snapshot with
+GPG, and extracts that same snapshot into `$RUNNER_TEMP/setup-swift/<version>/<arch>-<platform>`, which is added to
+`PATH`. The path is stable across runs so SwiftPM build caches (which record the compiler path) stay valid. Before
+extraction the directory is validated (exactly that shape, no `..`, and no symlink in any component from
+`RUNNER_TEMP` down, checked again just before use) and removed entirely, so nothing previously on disk is reused.
+A cache entry that fails verification fails the job instead of being re-downloaded. Isolation model:
+`RUNNER_TEMP` is private to one runner instance and emptied for every job on GitHub-hosted runners, so earlier or
+concurrent jobs cannot plant or wipe the toolchain. Self-hosted runners must not share `RUNNER_TEMP` between
+concurrently running jobs, and must run jobs of different trust levels on separate runner instances. Missing build prerequisites (`libcurl4-openssl-dev`,
 `libxml2-dev`, the GCC dev packages, ...) are installed with `apt-get` only if absent.
 
 macOS: the package is installed into the user domain (`~/Library/Developer/Toolchains`), falling back to
