@@ -67,7 +67,7 @@ for kind in $requested; do
       echo "::error::The Android SDK needs the Android NDK. Set ANDROID_NDK_HOME (GitHub-hosted Ubuntu and macOS images provide ANDROID_NDK_LATEST_HOME)."
       exit 1
     fi
-    bundle="$(find "${HOME}/.swiftpm/swift-sdks" "${HOME}/Library/org.swift.swiftpm/swift-sdks" -maxdepth 1 -name "swift-${v}-RELEASE_android.artifactbundle" 2> /dev/null | head -1 || true)"
+    bundle="$(find "${HOME}/.swiftpm/swift-sdks" "${HOME}/.config/swiftpm/swift-sdks" "${HOME}/Library/org.swift.swiftpm/swift-sdks" -maxdepth 1 -name "swift-${v}-RELEASE_android.artifactbundle" 2> /dev/null | head -1 || true)"
     setup="$(find "${bundle:-/nonexistent}" -maxdepth 3 -name 'setup-android-sdk.sh' 2> /dev/null | head -1 || true)"
     if [ -n "$setup" ]; then
       echo "Linking NDK sysroot with $setup (ANDROID_NDK_HOME=$ndk)"

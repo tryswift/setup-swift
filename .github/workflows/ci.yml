@@ -114,9 +114,21 @@ jobs:
           - { sdk: static-linux, os: ubuntu-24.04, id: 'x86_64-swift-linux-musl', build_args: "" }
           - { sdk: wasm, os: ubuntu-24.04, id: '_wasm$', build_args: "" }
           - { sdk: android, os: ubuntu-24.04, id: 'aarch64-unknown-linux-android28', build_args: "--static-swift-stdlib" }
-          # macos-latest ships NDK r27, too old to link the Swift 6.4 Android SDK (needs r30): not built here.
+          - { sdk: android, os: macos-latest, id: 'aarch64-unknown-linux-android28', build_args: "--static-swift-stdlib" }
     steps:
       - uses: actions/checkout@v7
+      # Runner images ship NDK r27; the Swift Android SDK needs r30 to link.
+      - name: Install Android NDK r30
+        if: matrix.sdk == 'android'
+        run: |
+          set -euo pipefail
+          sdkroot="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          mgr="$sdkroot/cmdline-tools/latest/bin/sdkmanager"
+          pkg="$("$mgr" --list 2> /dev/null | grep -o 'ndk;30[0-9.]*' | sort -V | tail -1)"
+          echo "Installing $pkg"
+          yes | "$mgr" --licenses > /dev/null || true
+          "$mgr" --install "$pkg" > /dev/null
+          echo "ANDROID_NDK_HOME=$sdkroot/ndk/${pkg#ndk;}" >> "$GITHUB_ENV"
       - id: setup
         uses: ./
         with:
