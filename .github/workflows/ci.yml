@@ -130,7 +130,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "$SDKS"
-          id="$(grep -E -m1 -- "$SDK_ID" <<< "$SDKS")"
+          # `swift sdk list` shows bundle ids; target triples (static Linux, Android) are accepted as is.
+          id="$(grep -E -m1 -- "$SDK_ID" <<< "$SDKS" || echo "$SDK_ID")"
           mkdir hello && cd hello
           swift package init --type executable --name hello
           # shellcheck disable=SC2086

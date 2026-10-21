@@ -4,8 +4,9 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $v = $env:SWIFT_VERSION
-# Subject (publisher) the installer must be signed by, see README.md.
-$ExpectedSubject = 'CN="Swift Open Source", O="Swift Open Source", L=Cupertino, S=California, C=US'
+# Publisher the installer must be signed by, see README.md. swift.org's Windows installers are signed
+# with an Apple Inc. certificate whose OU (an Apple internal group id) is deliberately not pinned.
+$ExpectedSubject = '^CN=Apple Inc\., (OU=[^,]+, )?O=Apple Inc\., L=Cupertino, S=California, C=US$'
 
 $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'windows10-arm64' } else { 'windows10' }
 $file = "swift-$v-RELEASE-$arch.exe"
@@ -27,7 +28,7 @@ Write-Host "Authenticode status: $($sig.Status); signer: $($sig.SignerCertificat
 if ($sig.Status -ne 'Valid') {
   Write-Host "::error::Authenticode signature of $file is not valid ($($sig.Status))"; exit 1
 }
-if ($sig.SignerCertificate.Subject -ne $ExpectedSubject) {
+if ($sig.SignerCertificate.Subject -notmatch $ExpectedSubject) {
   Write-Host "::error::$file is signed by '$($sig.SignerCertificate.Subject)', expected '$ExpectedSubject'"; exit 1
 }
 Write-Host "Authenticode signature verified for $file"
