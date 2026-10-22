@@ -1,5 +1,12 @@
 # setup-swift
 
+[![CI](https://github.com/tryswift/setup-swift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tryswift/setup-swift/actions/workflows/ci.yml)
+![Ubuntu x86_64 | aarch64](https://img.shields.io/badge/Ubuntu-x86__64%20%7C%20aarch64-E95420?logo=ubuntu&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS-Apple%20silicon%20%7C%20Intel-000000?logo=apple&logoColor=white)
+![Windows x86_64 | arm64](https://img.shields.io/badge/Windows-x86__64%20%7C%20arm64-0078D4?logo=windows&logoColor=white)
+![Swift SDKs](https://img.shields.io/badge/Swift%20SDKs-static%20Linux%20%7C%20Wasm%20%7C%20Android-F05138?logo=swift&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A composite GitHub Action that installs an exact [swift.org](https://www.swift.org) toolchain and
 **verifies the toolchain it installs before use** (Linux: GPG, macOS: Apple signature and team, Windows: Authenticode;
 see [How verification works](#how-verification-works)). It never runs a pre-existing `swift` unless you opt in with
