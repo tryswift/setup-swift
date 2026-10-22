@@ -6,6 +6,7 @@
 ![Windows x86_64 | arm64](https://img.shields.io/badge/Windows-x86__64%20%7C%20arm64-0078D4?logo=windows&logoColor=white)
 ![Swift SDKs](https://img.shields.io/badge/Swift%20SDKs-static%20Linux%20%7C%20Wasm%20%7C%20Android-F05138?logo=swift&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![try! Swift Tokyo](https://img.shields.io/badge/try!%20Swift-Tokyo-F05138?logo=swift&logoColor=white)](https://tryswift.jp)
 
 A composite GitHub Action that installs an exact [swift.org](https://www.swift.org) toolchain and
 **verifies the toolchain it installs before use** (Linux: GPG, macOS: Apple signature and team, Windows: Authenticode;
@@ -184,3 +185,9 @@ cache-hit path, builds hello world with the static Linux, WebAssembly and Androi
 the `+NoAsserts` toolchain on `windows-latest` and `windows-11-arm`. Not covered by CI: Ubuntu 20.04 (no 6.x
 tarballs for recent versions), the `+Asserts` toolchain on Windows arm64 (swiftlang/swift#92379), running
 WebAssembly output.
+
+## About
+
+This action is maintained by [try! Swift](https://tryswift.co), the community behind the try! Swift
+conferences. If you build with Swift, join the community in person at
+**[try! Swift Tokyo](https://tryswift.jp)**.
