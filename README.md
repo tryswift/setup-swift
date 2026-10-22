@@ -1,4 +1,4 @@
-# setup-swift
+# try! Swift Setup (`tryswift/setup-swift`)
 
 [![CI](https://github.com/tryswift/setup-swift/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tryswift/setup-swift/actions/workflows/ci.yml)
 ![Ubuntu x86_64 | aarch64](https://img.shields.io/badge/Ubuntu-x86__64%20%7C%20aarch64-E95420?logo=ubuntu&logoColor=white)

@@ -1,8 +1,10 @@
-name: Setup Swift
+name: try! Swift Setup
 description: >-
-  Installs an exact swift.org toolchain. Linux tarballs are GPG-verified against
-  pinned swift.org signing keys; macOS packages must be notarized and signed by
-  the Swift Open Source Developer ID team. Replaces swift-actions/setup-swift.
+  Install an exact swift.org toolchain on Linux, macOS and Windows, verified before use (GPG, Apple signature, Authenticode).
+author: try! Swift
+branding:
+  icon: shield
+  color: orange
 inputs:
   swift-version:
     description: Exact toolchain version, e.g. "6.4.1".
