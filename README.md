@@ -12,6 +12,29 @@ see [How verification works](#how-verification-works)). It never runs a pre-exis
     swift-version: "6.4.1"
 ```
 
+`@v1` follows the latest 1.x release. To pin, use a release tag (`@v1.1.0`) or, for the strongest guarantee,
+the commit SHA that tag points at.
+
+On Windows, arm64 needs the `+NoAsserts` toolchain ([swiftlang/swift#92379](https://github.com/swiftlang/swift/issues/92379)),
+and a CI build can leave out the debugger, its Python and the Android platform to shorten the install:
+
+```yaml
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: tryswift/setup-swift@v1
+        with:
+          swift-version: "6.4.1"
+          windows-toolchain-variant: noasserts
+          windows-minimal: true
+      - run: swift build
+```
+
 ## Inputs
 
 | Input | Required | Default | Description |
