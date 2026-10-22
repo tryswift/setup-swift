@@ -17,6 +17,16 @@ switch ($variant) {
   }
   default { Write-Host "::error::windows-toolchain-variant must be asserts or noasserts, got '$variant'"; exit 1 }
 }
+# windows-minimal: the installer features a CI build does not use. The debugger, its Python and the IDE
+# support are the bulk of what the installer writes besides the toolchain, and the Android platform
+# is a second SDK.
+switch ($env:WINDOWS_MINIMAL) {
+  { $_ -in @('', 'false') } { }
+  'true' {
+    $installerOptions += @('OptionsInstallDBG=0', 'OptionsInstallPy=0', 'OptionsInstallIDE=0', 'OptionsInstallAndroidPlatform=0')
+  }
+  default { Write-Host "::error::windows-minimal must be true or false, got '$env:WINDOWS_MINIMAL'"; exit 1 }
+}
 # Publisher the installer must be signed by, see README.md. swift.org's Windows installers are signed
 # with an Apple Inc. certificate whose OU (an Apple internal group id) is deliberately not pinned.
 $ExpectedSubject = '^CN=Apple Inc\., (OU=[^,]+, )?O=Apple Inc\., L=Cupertino, S=California, C=US$'
@@ -28,13 +38,22 @@ $work = Join-Path ($env:RUNNER_TEMP ?? $env:TEMP) "setup-swift-$([guid]::NewGuid
 New-Item -ItemType Directory -Path $work | Out-Null
 $exe = Join-Path $work $file
 
-Write-Host "Downloading $url"
-$ok = $false
-foreach ($i in 1..5) {
-  try { Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing; $ok = $true; break }
-  catch { Write-Host "Attempt $i failed: $($_.Exception.Message)"; Start-Sleep -Seconds 5 }
+# A cached installer is copied into this run's private directory and verified there, like a download:
+# the cache directory can be rewritten between a check and a use, the private copy cannot.
+$cached = if ($env:INSTALLER_CACHE_DIR) { Join-Path $env:INSTALLER_CACHE_DIR $file } else { $null }
+$fromCache = $cached -and (Test-Path -LiteralPath $cached -PathType Leaf)
+if ($fromCache) {
+  Write-Host "Found cached installer $cached; it will be re-verified"
+  Copy-Item -LiteralPath $cached -Destination $exe
+} else {
+  Write-Host "Downloading $url"
+  $ok = $false
+  foreach ($i in 1..5) {
+    try { Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing; $ok = $true; break }
+    catch { Write-Host "Attempt $i failed: $($_.Exception.Message)"; Start-Sleep -Seconds 5 }
+  }
+  if (-not $ok) { Write-Host "::error::Failed to download $url"; exit 1 }
 }
-if (-not $ok) { Write-Host "::error::Failed to download $url"; exit 1 }
 
 $sig = Get-AuthenticodeSignature -FilePath $exe
 Write-Host "Authenticode status: $($sig.Status); signer: $($sig.SignerCertificate.Subject)"
@@ -45,6 +64,14 @@ if ($sig.SignerCertificate.Subject -notmatch $ExpectedSubject) {
   Write-Host "::error::$file is signed by '$($sig.SignerCertificate.Subject)', expected '$ExpectedSubject'"; exit 1
 }
 Write-Host "Authenticode signature verified for $file"
+
+# Only bytes that just passed the check go into the cache; actions/cache saves the directory after
+# the job. A failed check leaves the cache as it was, so a tampered entry fails every run that
+# restores it rather than being replaced by a fresh download.
+if ($cached -and -not $fromCache) {
+  New-Item -ItemType Directory -Path $env:INSTALLER_CACHE_DIR -Force | Out-Null
+  Copy-Item -LiteralPath $exe -Destination $cached
+}
 
 # swift.org's installer defaults to %LocalAppData%\Programs\Swift. Directories for the requested
 # version must not exist beforehand, so only what this verified installer wrote is selected.
@@ -89,5 +116,5 @@ foreach ($d in @($toolchainBin, $runtimeBin, $sdkRoot)) {
 Add-Content -Path $env:GITHUB_PATH -Value $toolchainBin
 Add-Content -Path $env:GITHUB_PATH -Value $runtimeBin
 Add-Content -Path $env:GITHUB_ENV -Value "SDKROOT=$sdkRoot"
-Add-Content -Path $env:GITHUB_OUTPUT -Value 'source=installer'
+Add-Content -Path $env:GITHUB_OUTPUT -Value $(if ($fromCache) { 'source=cache' } else { 'source=installer' })
 Remove-Item -Recurse -Force $work

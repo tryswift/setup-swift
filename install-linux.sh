@@ -31,14 +31,36 @@ for pkg in curl gnupg2 binutils git libcurl4-openssl-dev libedit2 libsqlite3-0 l
   libncurses-dev pkg-config tzdata uuid-dev zlib1g-dev "libgcc-${gcc_ver}-dev" "libstdc++-${gcc_ver}-dev"; do
   dpkg -s "$pkg" > /dev/null 2>&1 || missing+=("$pkg")
 done
-if [ "${#missing[@]}" -gt 0 ]; then
-  echo "Installing missing packages: ${missing[*]}"
-  "${sudo_cmd[@]}" apt-get update -qq
-  "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}"
+# The package lists a runner image ships are tried first, and refreshed only when that fails: the
+# refresh is most of what installing a couple of packages costs.
+apt_install() {
+  "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$@" \
+    || { "${sudo_cmd[@]}" apt-get update -qq \
+      && "${sudo_cmd[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$@"; }
+}
+
+# curl and gnupg2 download and verify the toolchain, so they have to be there first. Everything else
+# is needed only to run it, and is installed in the background while the archive is fetched,
+# verified and extracted, then waited for at the end.
+needed_now=()
+later=()
+for pkg in "${missing[@]}"; do
+  case "$pkg" in curl | gnupg2) needed_now+=("$pkg") ;; *) later+=("$pkg") ;; esac
+done
+if [ "${#needed_now[@]}" -gt 0 ]; then
+  echo "Installing missing packages: ${needed_now[*]}"
+  apt_install "${needed_now[@]}"
 fi
 
 scratch="$(mktemp -d "${RUNNER_TEMP:-/tmp}/setup-swift.XXXXXX")"
 trap 'rm -r -f "$scratch"' EXIT
+
+apt_pid=""
+if [ "${#later[@]}" -gt 0 ]; then
+  echo "Installing missing packages in the background: ${later[*]}"
+  apt_install "${later[@]}" > "$scratch/apt.log" 2>&1 &
+  apt_pid=$!
+fi
 
 download() { # url dest
   curl --fail --silent --show-error --location --retry 5 --retry-delay 5 --retry-all-errors \
@@ -107,9 +129,20 @@ assert_no_symlinks "$dest"
 rm -r -f -- "$dest"
 mkdir "$dest"
 assert_no_symlinks "$dest"
-tar -xzf "$snap/$file" -C "$dest" --strip-components=1 --no-same-owner
+# pigz where the runner has it: inflation stays single-threaded, but pigz reads, writes and
+# checksums on threads of its own.
+if command -v pigz > /dev/null; then
+  tar -I pigz -xf "$snap/$file" -C "$dest" --strip-components=1 --no-same-owner
+else
+  tar -xzf "$snap/$file" -C "$dest" --strip-components=1 --no-same-owner
+fi
 rm -r -f -- "$snap"
 [ -x "$dest/usr/bin/swift" ] || { echo "::error::$dest/usr/bin/swift is missing after extraction"; exit 1; }
+if [ -n "$apt_pid" ] && ! wait "$apt_pid"; then
+  cat "$scratch/apt.log"
+  echo "::error::Installing the packages the toolchain needs failed: ${later[*]}"
+  exit 1
+fi
 if [ -n "${GITHUB_PATH:-}" ]; then echo "$dest/usr/bin" >> "$GITHUB_PATH"; fi
 if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "source=$source" >> "$GITHUB_OUTPUT"; fi
 echo "Installed Swift toolchain at $dest"

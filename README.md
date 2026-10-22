@@ -20,7 +20,8 @@ see [How verification works](#how-verification-works)). It never runs a pre-exis
 | `swift-sdks` | no | | Cross-compilation Swift SDKs to install after the toolchain: `static-linux`, `wasm`, `android` (comma or space separated). |
 | `use-preinstalled` | no | `false` | **Unverified opt-in.** If `swift` on `PATH` already reports exactly `swift-version`, run and use it instead of installing. By default no pre-existing binary is ever executed. |
 | `windows-toolchain-variant` | no | `asserts` | Windows only. `asserts` keeps the installer's default `+Asserts` toolchain; `noasserts` installs the `+NoAsserts` one instead. Use `noasserts` on win-arm64, where the `+Asserts` `swift-package.exe` fails to start ([swiftlang/swift#92379](https://github.com/swiftlang/swift/issues/92379)). |
-| `cache` | no | `true` | Cache the downloaded Linux toolchain archive and its `.sig` with `actions/cache`. The archive is re-verified with GPG on every run and extracted into a clean per-version directory; `false` reuses nothing on disk. |
+| `windows-minimal` | no | `false` | Windows only. `true` leaves out what a CI build does not use: the debugger (`OptionsInstallDBG`), its embedded Python (`OptionsInstallPy`), the IDE support (`OptionsInstallIDE`) and the Android platform (`OptionsInstallAndroidPlatform`). |
+| `cache` | no | `true` | Cache the downloaded Linux toolchain archive and its `.sig`, the macOS `.pkg` and the Windows installer with `actions/cache`. A cached copy is copied to a private directory and re-verified (GPG, pkg signature and notarization, Authenticode) on every run before anything runs it; `false` reuses nothing on disk. |
 
 ## Outputs
 
@@ -28,7 +29,7 @@ see [How verification works](#how-verification-works)). It never runs a pre-exis
 | --- | --- |
 | `version` | Version reported by `swift --version`. |
 | `swift-path` | Directory containing the active `swift` binary. |
-| `source` | `preinstalled` (opt-in only), `cache`, `download` (Linux), `pkg` (macOS) or `installer` (Windows). |
+| `source` | `preinstalled` (opt-in only), `cache` (a cached archive, `.pkg` or installer, re-verified), `download` (Linux), `pkg` (macOS) or `installer` (Windows). |
 | `sdks` | `swift sdk list` output after installing `swift-sdks`. |
 
 The action fails if `swift --version` does not report exactly the requested version afterwards.
@@ -60,15 +61,15 @@ A cache entry that fails verification fails the job instead of being re-download
 `RUNNER_TEMP` is private to one runner instance and emptied for every job on GitHub-hosted runners, so earlier or
 concurrent jobs cannot plant or wipe the toolchain. Self-hosted runners must not share `RUNNER_TEMP` between
 concurrently running jobs, and must run jobs of different trust levels on separate runner instances. Missing build prerequisites (`libcurl4-openssl-dev`,
-`libxml2-dev`, the GCC dev packages, ...) are installed with `apt-get` only if absent.
+`libxml2-dev`, the GCC dev packages, ...) are installed with `apt-get` only if absent - from the package lists the runner image ships, refreshed only if that fails, and, apart from `curl` and `gnupg2`, in the background while the archive is fetched, verified and extracted. The archive is extracted with `pigz` when the runner has it.
 
 macOS: the package is installed into the user domain (`~/Library/Developer/Toolchains`), falling back to
 `sudo installer -target /`. `TOOLCHAINS` is exported with the toolchain's bundle identifier and its
-`usr/bin` is prepended to `PATH`. The install path is deterministic (like the Linux and Windows ones), so SwiftPM build caches stay valid. macOS installs are not cached.
+`usr/bin` is prepended to `PATH`. The install path is deterministic (like the Linux and Windows ones), so SwiftPM build caches stay valid. The macOS `.pkg` is cached the same way: restored, copied to a private directory, and installed only after its signature and notarization check pass again.
 
 Windows: the installer runs silently (`/install /quiet`) into `%LocalAppData%\Programs\Swift`; the toolchain and
 runtime `bin` directories are added to `PATH` and `SDKROOT` is set. Visual Studio (C++ tools, Windows SDK),
-preinstalled on GitHub's Windows runners, is still required. Windows installs are not cached. The directories for the requested version must not exist before the
+preinstalled on GitHub's Windows runners, is still required. The installer is cached like the macOS `.pkg` and passes the Authenticode check again on every run. The directories for the requested version must not exist before the
 installer runs, and exactly one matching `Toolchains`, `Runtimes` and `Platforms` directory is selected. With
 `windows-toolchain-variant: noasserts` the installer is passed `OptionsInstallAssertsToolchain=0
 OptionsInstallNoAssertsToolchain=1`, and the toolchain directory selected must be the `+NoAsserts` one.

@@ -26,10 +26,18 @@ inputs:
       (https://github.com/swiftlang/swift/issues/92379); the +NoAsserts one does not.
     required: false
     default: "asserts"
+  windows-minimal:
+    description: >-
+      Windows only: leave out what a CI build does not use - the debugger, its embedded Python, the IDE
+      support (SourceKit-LSP) and the Android platform. Shortens the install; default false installs
+      everything the installer installs by default.
+    required: false
+    default: "false"
   cache:
     description: >-
-      Cache the downloaded Linux toolchain archive and its signature with actions/cache. The archive is
-      re-verified with GPG on every run; with false nothing on disk is ever reused.
+      Cache the downloaded Linux toolchain archive and its signature, the macOS .pkg and the Windows
+      installer with actions/cache. A cached copy is re-verified (GPG, pkg signature, Authenticode)
+      on every run; with false nothing on disk is ever reused.
     required: false
     default: "true"
 outputs:
@@ -96,12 +104,31 @@ runs:
         DOWNLOAD_DIR: ${{ inputs.cache == 'true' && steps.plan.outputs.download-dir || '' }}
       run: bash "$GITHUB_ACTION_PATH/install-linux.sh"
 
+    # The macOS .pkg and the Windows installer are cached as they were downloaded. Like the Linux
+    # archive, a cached copy is copied to a private directory and its signature checked again on every
+    # run before anything runs it.
+    - name: Plan installer cache
+      id: installer-cache
+      if: steps.existing.outputs.found != 'true' && runner.os != 'Linux' && inputs.cache == 'true'
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+      run: echo "dir=$RUNNER_TOOL_CACHE/swift-installers/$SWIFT_VERSION-$RUNNER_OS-$RUNNER_ARCH" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Swift installer cache
+      if: steps.existing.outputs.found != 'true' && runner.os != 'Linux' && inputs.cache == 'true'
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.installer-cache.outputs.dir }}
+        key: swift-installer-${{ inputs.swift-version }}-${{ runner.os }}-${{ runner.arch }}-v1
+
     - name: Install Swift (macOS, signature verified)
       id: macos
       if: steps.existing.outputs.found != 'true' && runner.os == 'macOS'
       shell: bash
       env:
         SWIFT_VERSION: ${{ inputs.swift-version }}
+        INSTALLER_CACHE_DIR: ${{ steps.installer-cache.outputs.dir }}
       run: bash "$GITHUB_ACTION_PATH/install-macos.sh"
 
     - name: Install Swift (Windows, Authenticode verified)
@@ -111,6 +138,8 @@ runs:
       env:
         SWIFT_VERSION: ${{ inputs.swift-version }}
         WINDOWS_TOOLCHAIN_VARIANT: ${{ inputs.windows-toolchain-variant }}
+        WINDOWS_MINIMAL: ${{ inputs.windows-minimal }}
+        INSTALLER_CACHE_DIR: ${{ steps.installer-cache.outputs.dir }}
       run: '& "$env:GITHUB_ACTION_PATH/install-windows.ps1"'
 
     - name: Report Swift version
