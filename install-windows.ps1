@@ -17,13 +17,13 @@ switch ($variant) {
   }
   default { Write-Host "::error::windows-toolchain-variant must be asserts or noasserts, got '$variant'"; exit 1 }
 }
-# windows-minimal: the installer features a CI build does not use. The debugger, its Python and the IDE
-# support are the bulk of what the installer writes besides the toolchain, and the Android platform
-# is a second SDK.
+# windows-minimal: the installer features a CI build does not use - the debugger, its Python and the
+# Android platform, a second SDK. Not the IDE feature: without it swift.exe fails to start with
+# ERROR_SXS_CANT_GEN_ACTCTX (14001), measured on 6.4.1 with each feature left out on its own.
 switch ($env:WINDOWS_MINIMAL) {
   { $_ -in @('', 'false') } { }
   'true' {
-    $installerOptions += @('OptionsInstallDBG=0', 'OptionsInstallPy=0', 'OptionsInstallIDE=0', 'OptionsInstallAndroidPlatform=0')
+    $installerOptions += @('OptionsInstallDBG=0', 'OptionsInstallPy=0', 'OptionsInstallAndroidPlatform=0')
   }
   default { Write-Host "::error::windows-minimal must be true or false, got '$env:WINDOWS_MINIMAL'"; exit 1 }
 }

@@ -28,9 +28,9 @@ inputs:
     default: "asserts"
   windows-minimal:
     description: >-
-      Windows only: leave out what a CI build does not use - the debugger, its embedded Python, the IDE
-      support (SourceKit-LSP) and the Android platform. Shortens the install; default false installs
-      everything the installer installs by default.
+      Windows only: leave out what a CI build does not use - the debugger, its embedded Python and the
+      Android platform. Shortens the install; default false installs everything the installer
+      installs by default.
     required: false
     default: "false"
   cache:
