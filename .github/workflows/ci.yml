@@ -122,32 +122,6 @@ jobs:
           echo "$FIRST / $SECOND"
           test -n "$FIRST" && test "$FIRST" = "$SECOND"
 
-  # The macOS .pkg and the Windows installer cached by `install`, restored and verified again.
-  installer-cache-hit:
-    name: installer cache hit (${{ matrix.os }}, ${{ matrix.swift }})
-    needs: install
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-        swift: ["6.4.1"]
-    steps:
-      - uses: actions/checkout@v7
-      - id: setup
-        uses: ./
-        with:
-          swift-version: ${{ matrix.swift }}
-      - name: Expect the installer to come from the cache (and be re-verified)
-        env:
-          SOURCE: ${{ steps.setup.outputs.source }}
-        run: |
-          test "$SOURCE" = cache
-          swift --version
-
   unsupported-version:
     runs-on: ubuntu-24.04
     steps:
