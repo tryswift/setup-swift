@@ -1,9 +1,22 @@
 # Installs the swift.org Windows toolchain after requiring a valid Authenticode
-# signature from the expected publisher. Inputs (env): SWIFT_VERSION.
+# signature from the expected publisher. Inputs (env): SWIFT_VERSION,
+# WINDOWS_TOOLCHAIN_VARIANT (asserts | noasserts).
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $v = $env:SWIFT_VERSION
+# The installer's two toolchain features. "asserts" leaves the installer at its default; "noasserts"
+# swaps the +Asserts toolchain for the +NoAsserts one, whose swift-package.exe starts on win-arm64
+# where the +Asserts one does not (https://github.com/swiftlang/swift/issues/92379).
+$variant = if ($env:WINDOWS_TOOLCHAIN_VARIANT) { $env:WINDOWS_TOOLCHAIN_VARIANT } else { 'asserts' }
+switch ($variant) {
+  'asserts' { $installerOptions = @(); $variantSuffix = $null }
+  'noasserts' {
+    $installerOptions = @('OptionsInstallAssertsToolchain=0', 'OptionsInstallNoAssertsToolchain=1')
+    $variantSuffix = 'NoAsserts'
+  }
+  default { Write-Host "::error::windows-toolchain-variant must be asserts or noasserts, got '$variant'"; exit 1 }
+}
 # Publisher the installer must be signed by, see README.md. swift.org's Windows installers are signed
 # with an Apple Inc. certificate whose OU (an Apple internal group id) is deliberately not pinned.
 $ExpectedSubject = '^CN=Apple Inc\., (OU=[^,]+, )?O=Apple Inc\., L=Cupertino, S=California, C=US$'
@@ -37,7 +50,9 @@ Write-Host "Authenticode signature verified for $file"
 # version must not exist beforehand, so only what this verified installer wrote is selected.
 $root = Join-Path $env:LOCALAPPDATA 'Programs\Swift'
 $vre = [regex]::Escape($v)
-$toolchainPattern = "^$vre(\+[A-Za-z0-9]+)?$"
+# With noasserts the one toolchain directory has to be the +NoAsserts one: an installer that ignored the
+# options would otherwise pass the exactly-one check below with the toolchain nobody asked for.
+$toolchainPattern = if ($variantSuffix) { "^$vre\+$variantSuffix$" } else { "^$vre(\+[A-Za-z0-9]+)?$" }
 $versionPattern = "^$vre$"
 
 function Find-VersionDirs([string]$sub, [string]$pattern) {
@@ -59,7 +74,7 @@ foreach ($pair in @(@('Toolchains', $toolchainPattern), @('Runtimes', $versionPa
   }
 }
 
-$p = Start-Process -FilePath $exe -ArgumentList '/install', '/quiet', '/norestart' -Wait -PassThru
+$p = Start-Process -FilePath $exe -ArgumentList (@('/install', '/quiet', '/norestart') + $installerOptions) -Wait -PassThru
 if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
   Write-Host "::error::Swift installer exited with code $($p.ExitCode)"; exit 1
 }

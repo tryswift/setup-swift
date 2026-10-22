@@ -19,6 +19,13 @@ inputs:
       installing a verified toolchain. Default false: pre-existing binaries are never executed.
     required: false
     default: "false"
+  windows-toolchain-variant:
+    description: >-
+      Windows only: which toolchain the swift.org installer puts in, "asserts" (the installer's default)
+      or "noasserts". The +Asserts swift-package.exe fails to start on win-arm64
+      (https://github.com/swiftlang/swift/issues/92379); the +NoAsserts one does not.
+    required: false
+    default: "asserts"
   cache:
     description: >-
       Cache the downloaded Linux toolchain archive and its signature with actions/cache. The archive is
@@ -103,6 +110,7 @@ runs:
       shell: pwsh
       env:
         SWIFT_VERSION: ${{ inputs.swift-version }}
+        WINDOWS_TOOLCHAIN_VARIANT: ${{ inputs.windows-toolchain-variant }}
       run: '& "$env:GITHUB_ACTION_PATH/install-windows.ps1"'
 
     - name: Report Swift version

@@ -56,6 +56,39 @@ jobs:
           swift package init --type executable --name hello
           swift run
 
+  # The +NoAsserts toolchain on both Windows architectures. win-arm64 is where it matters: the +Asserts
+  # swift-package.exe fails to start there (swiftlang/swift#92379), so it is not in the matrix above.
+  windows-noasserts:
+    name: windows noasserts (${{ matrix.os }}, ${{ matrix.swift }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-11-arm]
+        swift: ["6.4.1"]
+    steps:
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./
+        with:
+          swift-version: ${{ matrix.swift }}
+          windows-toolchain-variant: noasserts
+      - name: Check the +NoAsserts toolchain was selected, and compile
+        env:
+          VERSION: ${{ steps.setup.outputs.version }}
+          SWIFT_PATH: ${{ steps.setup.outputs.swift-path }}
+        run: |
+          set -euo pipefail
+          echo "swift-path=$SWIFT_PATH"
+          test "$VERSION" = "${{ matrix.swift }}"
+          case "$SWIFT_PATH" in *+NoAsserts*) ;; *) echo "not the +NoAsserts toolchain: $SWIFT_PATH"; exit 1 ;; esac
+          mkdir hello && cd hello
+          swift package init --type executable --name hello
+          swift run
+
   # Runs after `install` so the Linux toolchain cache it saved is available.
   cache-hit:
     name: cache hit (${{ matrix.os }}, ${{ matrix.swift }})
