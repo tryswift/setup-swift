@@ -34,8 +34,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, macos-latest, windows-latest]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm, macos-latest, windows-latest]
         swift: ["6.4.1", "6.3.3"]
+        exclude:
+          # swift.org publishes no Ubuntu 26.04 build of 6.3.x.
+          - { os: ubuntu-26.04, swift: "6.3.3" }
+          - { os: ubuntu-26.04-arm, swift: "6.3.3" }
     steps:
       - uses: actions/checkout@v7
       - id: setup
@@ -98,8 +102,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm]
+        os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, ubuntu-26.04, ubuntu-26.04-arm]
         swift: ["6.4.1", "6.3.3"]
+        exclude:
+          - { os: ubuntu-26.04, swift: "6.3.3" }
+          - { os: ubuntu-26.04-arm, swift: "6.3.3" }
     steps:
       - uses: actions/checkout@v7
       - id: setup

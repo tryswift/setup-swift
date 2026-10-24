@@ -73,7 +73,7 @@ emitted); that toolchain is **not verified** by this action.
 
 | Platform | Artifact | Verification |
 | --- | --- | --- |
-| Ubuntu 20.04 / 22.04 / 24.04, x86_64 and aarch64 | `swift-<v>-RELEASE-ubuntuNN.NN[-aarch64].tar.gz` | GPG `.sig` against pinned swift.org keys |
+| Ubuntu 20.04 / 22.04 / 24.04 / 26.04, x86_64 and aarch64 | `swift-<v>-RELEASE-ubuntuNN.NN[-aarch64].tar.gz` | GPG `.sig` against pinned swift.org keys |
 | macOS (any runner) | `swift-<v>-RELEASE-osx.pkg` | `pkgutil --check-signature`, notarization, pinned Developer ID team |
 | Windows, x86_64 and arm64 | `swift-<v>-RELEASE-windows10[-arm64].exe` | Authenticode `Valid` and signer subject (Apple Inc.) |
 | Swift SDKs (`static-linux`, `wasm`, `android`) on any host | `swift-<v>-RELEASE_<kind>.artifactbundle.tar.gz` | sha256 pinned in `sdk-checksums.txt`, plus GPG `.sig` when `gpg` exists |
@@ -180,7 +180,7 @@ compressed; use `curl --compressed`). The fingerprints were cross-checked agains
 ## Development
 
 CI (`.github/workflows/ci.yml`) runs shellcheck, actionlint, installs 6.4.1 and 6.3.3 on
-`ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-latest` and `windows-latest`, checks the Linux
+`ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-24.04-arm`, `ubuntu-26.04`, `ubuntu-26.04-arm` (6.4.1 only: swift.org has no 6.3.x build for 26.04), `macos-latest` and `windows-latest`, checks the Linux
 cache-hit path, builds hello world with the static Linux, WebAssembly and Android SDKs, and builds hello world with
 the `+NoAsserts` toolchain on `windows-latest` and `windows-11-arm`. Not covered by CI: Ubuntu 20.04 (no 6.x
 tarballs for recent versions), the `+Asserts` toolchain on Windows arm64 (swiftlang/swift#92379), running

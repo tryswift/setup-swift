@@ -23,6 +23,7 @@ missing=()
 # GCC development packages per swift.org's prerequisites for each Ubuntu release.
 # shellcheck disable=SC1091
 case "$(. /etc/os-release && echo "${VERSION_ID:-}")" in
+  26.04) gcc_ver=15 ;;
   24.04) gcc_ver=13 ;;
   22.04) gcc_ver=12 ;;
   *) gcc_ver=10 ;;

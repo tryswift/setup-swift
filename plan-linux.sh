@@ -15,8 +15,9 @@ case "${ID:-}-${VERSION_ID:-}" in
   ubuntu-20.04) dir_platform=ubuntu2004; file_platform=ubuntu20.04 ;;
   ubuntu-24.04) dir_platform=ubuntu2404; file_platform=ubuntu24.04 ;;
   ubuntu-22.04) dir_platform=ubuntu2204; file_platform=ubuntu22.04 ;;
+  ubuntu-26.04) dir_platform=ubuntu2604; file_platform=ubuntu26.04 ;;
   *)
-    echo "::error::Unsupported Linux distribution '${ID:-?} ${VERSION_ID:-?}'; setup-swift supports Ubuntu 20.04, 22.04 and 24.04"
+    echo "::error::Unsupported Linux distribution '${ID:-?} ${VERSION_ID:-?}'; setup-swift supports Ubuntu 20.04, 22.04, 24.04 and 26.04"
     exit 1
     ;;
 esac
