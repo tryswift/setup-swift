@@ -146,6 +146,12 @@ compressed; use `curl --compressed`). The fingerprints were cross-checked agains
 ## Development
 
 CI (`.github/workflows/ci.yml`) runs shellcheck, actionlint, installs 6.4.1 and 6.3.3 on
-`ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-latest` and `windows-latest`, checks the Linux
+`ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-latest` and `windows-latest` (plus 6.4.1 on
+`ubuntu-26.04` and `ubuntu-26.04-arm`), checks the Linux
 cache-hit path, and builds hello world with the static Linux, WebAssembly and Android SDKs. Not covered by CI:
 Ubuntu 20.04 (no 6.x tarballs for recent versions), Windows arm64, running WebAssembly output.
+
+`.github/workflows/watch-linux.yml` runs weekly: it installs the newest swift.org release on every Ubuntu
+runner that both swift.org and GitHub-hosted runners offer, so a new Ubuntu release is tested as soon as it
+appears (no code change is needed for a new Ubuntu version). A failing scheduled run opens or comments on a
+"Latest Linux check failing" issue.

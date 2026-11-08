@@ -1,0 +1,81 @@
+name: Watch latest Linux
+
+# Weekly: installs the newest swift.org release on every Ubuntu that swift.org publishes it for AND
+# GitHub offers a hosted runner for, so new Ubuntu releases are exercised as soon as both exist
+# (plan-linux.sh maps any Ubuntu version generically). Failures open or update a tracking issue.
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      swift: ${{ steps.find.outputs.swift }}
+      runners: ${{ steps.find.outputs.runners }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          releases="$(curl -sSfL --retry 3 https://www.swift.org/api/v1/install/releases.json)"
+          swift="$(jq -r '.[-1].name' <<< "$releases")"
+          [[ "$swift" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "::error::unexpected release name '$swift'"; exit 1; }
+          ubuntus="$(jq -r '.[-1].platforms[].name | capture("^Ubuntu (?<v>[0-9]{2}\\.[0-9]{2})$").v' <<< "$releases")"
+          labels="$(gh api repos/actions/runner-images/contents/README.md -H 'Accept: application/vnd.github.raw' \
+            | grep -oE "\`ubuntu-[0-9]{2}\\.[0-9]{2}(-arm)?\`" | tr -d '`' | sort -u)"
+          runners="$(for v in $ubuntus; do grep -E "^ubuntu-${v//./\\.}(-arm)?$" <<< "$labels" || true; done | jq -R . | jq -cs .)"
+          [ "$runners" != "[]" ] || { echo "::error::no Ubuntu runner matches swift.org $swift ($ubuntus)"; exit 1; }
+          echo "Swift $swift on $runners"
+          { echo "swift=$swift"; echo "runners=$runners"; } >> "$GITHUB_OUTPUT"
+
+  install:
+    name: install (${{ matrix.os }}, ${{ needs.discover.outputs.swift }})
+    needs: discover
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.discover.outputs.runners) }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: setup
+        uses: ./
+        with:
+          swift-version: ${{ needs.discover.outputs.swift }}
+          cache: "false"
+      - name: Compile and run hello world
+        env:
+          WANT: ${{ needs.discover.outputs.swift }}
+          VERSION: ${{ steps.setup.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$VERSION" = "$WANT"
+          mkdir hello && cd hello
+          swift package init --type executable --name hello
+          swift run
+
+  report:
+    needs: [discover, install]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SWIFT: ${{ needs.discover.outputs.swift }}
+          RUNNERS: ${{ needs.discover.outputs.runners }}
+        run: |
+          set -euo pipefail
+          title="Latest Linux check failing"
+          body="Swift \`${SWIFT:-?}\` on \`${RUNNERS:-?}\` failed: $RUN_URL"
+          num="$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$num" ]; then gh issue comment "$num" --body "$body"; else gh issue create --title "$title" --body "$body"; fi
