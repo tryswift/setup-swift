@@ -23,10 +23,14 @@ missing=()
 # GCC development packages per swift.org's prerequisites for each Ubuntu release.
 # shellcheck disable=SC1091
 case "$(. /etc/os-release && echo "${VERSION_ID:-}")" in
+  26.04) gcc_ver=15 ;;
   24.04) gcc_ver=13 ;;
   22.04) gcc_ver=12 ;;
-  *) gcc_ver=10 ;;
+  20.04) gcc_ver=10 ;;
+  # Newer releases: the distribution's default GCC (what swift.org's Dockerfiles have used so far).
+  *) gcc_ver="$(apt-cache depends gcc 2> /dev/null | grep -m1 -oE 'gcc-[0-9]+' | cut -d- -f2 || true)" ;;
 esac
+[ -n "$gcc_ver" ] || { echo "::error::Cannot determine the GCC version for this Ubuntu release"; exit 1; }
 for pkg in curl gnupg2 binutils git libcurl4-openssl-dev libedit2 libsqlite3-0 libxml2-dev \
   libncurses-dev pkg-config tzdata uuid-dev zlib1g-dev "libgcc-${gcc_ver}-dev" "libstdc++-${gcc_ver}-dev"; do
   dpkg -s "$pkg" > /dev/null 2>&1 || missing+=("$pkg")

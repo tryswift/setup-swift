@@ -36,6 +36,10 @@ jobs:
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm, macos-latest, windows-latest]
         swift: ["6.4.1", "6.3.3"]
+        # swift.org publishes Ubuntu 26.04 toolchains from 6.4 on.
+        include:
+          - { os: ubuntu-26.04, swift: "6.4.1" }
+          - { os: ubuntu-26.04-arm, swift: "6.4.1" }
     steps:
       - uses: actions/checkout@v7
       - id: setup
@@ -66,6 +70,9 @@ jobs:
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04, ubuntu-24.04-arm]
         swift: ["6.4.1", "6.3.3"]
+        include:
+          - { os: ubuntu-26.04, swift: "6.4.1" }
+          - { os: ubuntu-26.04-arm, swift: "6.4.1" }
     steps:
       - uses: actions/checkout@v7
       - id: setup

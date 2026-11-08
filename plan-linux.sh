@@ -11,15 +11,15 @@ fi
 
 # shellcheck disable=SC1091
 . /etc/os-release
-case "${ID:-}-${VERSION_ID:-}" in
-  ubuntu-20.04) dir_platform=ubuntu2004; file_platform=ubuntu20.04 ;;
-  ubuntu-24.04) dir_platform=ubuntu2404; file_platform=ubuntu24.04 ;;
-  ubuntu-22.04) dir_platform=ubuntu2204; file_platform=ubuntu22.04 ;;
-  *)
-    echo "::error::Unsupported Linux distribution '${ID:-?} ${VERSION_ID:-?}'; setup-swift supports Ubuntu 20.04, 22.04 and 24.04"
-    exit 1
-    ;;
-esac
+# Any Ubuntu release maps to swift.org's naming (ubuntu2604 / ubuntu26.04), so new LTS releases work
+# without a code change; a version swift.org does not publish fails at download time.
+if [ "${ID:-}" = ubuntu ] && [[ "${VERSION_ID:-}" =~ ^[0-9]{2}\.[0-9]{2}$ ]]; then
+  dir_platform="ubuntu${VERSION_ID//./}"
+  file_platform="ubuntu${VERSION_ID}"
+else
+  echo "::error::Unsupported Linux distribution '${ID:-?} ${VERSION_ID:-?}'; setup-swift supports Ubuntu releases published on swift.org"
+  exit 1
+fi
 
 case "$(uname -m)" in
   x86_64) arch=x86_64; arch_suffix="" ;;

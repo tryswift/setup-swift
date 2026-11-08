@@ -40,13 +40,14 @@ emitted); that toolchain is **not verified** by this action.
 
 | Platform | Artifact | Verification |
 | --- | --- | --- |
-| Ubuntu 20.04 / 22.04 / 24.04, x86_64 and aarch64 | `swift-<v>-RELEASE-ubuntuNN.NN[-aarch64].tar.gz` | GPG `.sig` against pinned swift.org keys |
+| Ubuntu (any release swift.org publishes, e.g. 22.04 / 24.04 / 26.04), x86_64 and aarch64 | `swift-<v>-RELEASE-ubuntuNN.NN[-aarch64].tar.gz` | GPG `.sig` against pinned swift.org keys |
 | macOS (any runner) | `swift-<v>-RELEASE-osx.pkg` | `pkgutil --check-signature`, notarization, pinned Developer ID team |
 | Windows, x86_64 and arm64 | `swift-<v>-RELEASE-windows10[-arm64].exe` | Authenticode `Valid` and signer subject (Apple Inc.) |
 | Swift SDKs (`static-linux`, `wasm`, `android`) on any host | `swift-<v>-RELEASE_<kind>.artifactbundle.tar.gz` | sha256 pinned in `sdk-checksums.txt`, plus GPG `.sig` when `gpg` exists |
 
 Other Linux distributions and architectures fail with an explicit error. Not every version is
-published for every platform (for example, newer releases have no Ubuntu 20.04 build); a missing
+published for every platform (for example, newer releases have no Ubuntu 20.04 build and Ubuntu 26.04
+starts with 6.4); a missing
 download fails with the URL that was tried.
 
 Linux: the tarball and `.sig` are kept in `$RUNNER_TOOL_CACHE/swift-archives/...` and cached (key: version,
