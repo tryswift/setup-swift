@@ -47,7 +47,7 @@ jobs:
 
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
-| `swift-version` | yes | | Exact toolchain version, e.g. `6.4.1` or `6.3.3`. Ranges and `latest` are not supported. |
+| `swift-version` | no | | Exact toolchain version, e.g. `6.4.1` or `6.3.3`. Ranges and `latest` are not supported. If empty, the version is read from `.swift-version` in the working directory (surrounding whitespace removed) and must also be an exact version. |
 | `swift-sdks` | no | | Cross-compilation Swift SDKs to install after the toolchain: `static-linux`, `wasm`, `android` (comma or space separated). |
 | `use-preinstalled` | no | `false` | **Unverified opt-in.** If `swift` on `PATH` already reports exactly `swift-version`, run and use it instead of installing. By default no pre-existing binary is ever executed. |
 | `windows-toolchain-variant` | no | `asserts` | Windows only. `asserts` keeps the installer's default `+Asserts` toolchain; `noasserts` installs the `+NoAsserts` one instead. Use `noasserts` on win-arm64, where the `+Asserts` `swift-package.exe` fails to start ([swiftlang/swift#92379](https://github.com/swiftlang/swift/issues/92379)). |

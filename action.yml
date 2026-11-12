@@ -7,8 +7,11 @@ branding:
   color: orange
 inputs:
   swift-version:
-    description: Exact toolchain version, e.g. "6.4.1".
-    required: true
+    description: >-
+      Exact toolchain version, e.g. "6.4.1". If empty, the version is read from .swift-version in the
+      working directory (surrounding whitespace removed); it must be an exact version too.
+    required: false
+    default: ""
   swift-sdks:
     description: >-
       Comma or space separated Swift SDKs to install after the toolchain: static-linux, wasm, android.
@@ -67,10 +70,21 @@ runs:
         USE_PREINSTALLED: ${{ inputs.use-preinstalled }}
       run: |
         set -euo pipefail
+        if [ -z "$SWIFT_VERSION" ]; then
+          if [ ! -f .swift-version ]; then
+            echo "::error::swift-version is empty and no .swift-version file was found in $PWD"
+            exit 1
+          fi
+          SWIFT_VERSION="$(< .swift-version)"
+          SWIFT_VERSION="${SWIFT_VERSION#"${SWIFT_VERSION%%[![:space:]]*}"}"
+          SWIFT_VERSION="${SWIFT_VERSION%"${SWIFT_VERSION##*[![:space:]]}"}"
+          echo "Read Swift version '$SWIFT_VERSION' from .swift-version"
+        fi
         if [[ ! "$SWIFT_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
           echo "::error::swift-version must be an exact version like 6.4.1, got '$SWIFT_VERSION'"
           exit 1
         fi
+        echo "swift-version=$SWIFT_VERSION" >> "$GITHUB_OUTPUT"
         # Pre-existing binaries are executed only on explicit opt-in.
         pattern="Swift version ${SWIFT_VERSION//./\\.}[ (]"
         if [ "$USE_PREINSTALLED" = true ] && command -v swift > /dev/null && swift --version 2>&1 | grep -Eq "$pattern"; then
@@ -86,7 +100,7 @@ runs:
       if: steps.existing.outputs.found != 'true' && runner.os == 'Linux'
       shell: bash
       env:
-        SWIFT_VERSION: ${{ inputs.swift-version }}
+        SWIFT_VERSION: ${{ steps.existing.outputs.swift-version }}
       run: bash "$GITHUB_ACTION_PATH/plan-linux.sh"
 
     - name: Restore Swift toolchain cache
@@ -112,7 +126,7 @@ runs:
       if: steps.existing.outputs.found != 'true' && runner.os == 'macOS'
       shell: bash
       env:
-        SWIFT_VERSION: ${{ inputs.swift-version }}
+        SWIFT_VERSION: ${{ steps.existing.outputs.swift-version }}
       run: bash "$GITHUB_ACTION_PATH/install-macos.sh"
 
     - name: Install Swift (Windows, Authenticode verified)
@@ -120,7 +134,7 @@ runs:
       if: steps.existing.outputs.found != 'true' && runner.os == 'Windows'
       shell: pwsh
       env:
-        SWIFT_VERSION: ${{ inputs.swift-version }}
+        SWIFT_VERSION: ${{ steps.existing.outputs.swift-version }}
         WINDOWS_TOOLCHAIN_VARIANT: ${{ inputs.windows-toolchain-variant }}
         WINDOWS_MINIMAL: ${{ inputs.windows-minimal }}
       run: '& "$env:GITHUB_ACTION_PATH/install-windows.ps1"'
@@ -129,7 +143,7 @@ runs:
       id: report
       shell: bash
       env:
-        SWIFT_VERSION: ${{ inputs.swift-version }}
+        SWIFT_VERSION: ${{ steps.existing.outputs.swift-version }}
         SOURCE: ${{ steps.linux.outputs.source || steps.macos.outputs.source || steps.windows.outputs.source || 'preinstalled' }}
       run: |
         set -euo pipefail
@@ -148,6 +162,6 @@ runs:
       if: inputs.swift-sdks != ''
       shell: bash
       env:
-        SWIFT_VERSION: ${{ inputs.swift-version }}
+        SWIFT_VERSION: ${{ steps.existing.outputs.swift-version }}
         SWIFT_SDKS: ${{ inputs.swift-sdks }}
       run: bash "$GITHUB_ACTION_PATH/install-sdks.sh"
